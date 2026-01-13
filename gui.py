@@ -48,6 +48,13 @@ class SystemMonitorGUI:
         container = ttk.Frame(self.tab1, padding=10)
         container.pack(fill='both', expand=True)
 
+        # refresh button at the top
+        header = ttk.Frame(container)
+        header.pack(fill='x', pady=(0, 10))
+        ttk.Label(header, text="My System", font=('Segoe UI', 11, 'bold')).pack(side='left')
+        refresh_btn = ttk.Button(header, text="Refresh", command=self.refresh_static_sys_info)
+        refresh_btn.pack(side='right')
+
         left = ttk.Frame(container)
         right = ttk.Frame(container)
         left.pack(side='left', fill='y', padx=(0, 10))
@@ -105,6 +112,10 @@ class SystemMonitorGUI:
 
     def refresh_static_sys_info(self):
         info = sysinfo.get_static_sys_info()  # dict
+        # update cpu usage with current value
+        cpu_usage = sysinfo.get_cpu_usage_percent()
+        info['cpu_usage'] = round(cpu_usage, 1)
+        
         # fill left labels with system info
         for key, val in info.items():
             if key in self.sys_labels:
@@ -125,7 +136,6 @@ class SystemMonitorGUI:
 
     def update_dynamic_metrics(self):
         # calculate network up/down speed from counters
-        # note: sys_info labels are now static and don't update
         now = time.time()
         counters = sysinfo.get_net_io_counters()
         if counters:
@@ -134,7 +144,7 @@ class SystemMonitorGUI:
                 delta_t = max(1e-3, now - self.prev_net_ts)
                 up_mbps   = monitor.bytes_to_mbps(sent - self.prev_net_io[0], delta_t)
                 down_mbps = monitor.bytes_to_mbps(recv - self.prev_net_io[1], delta_t)
-                # update treeview with network speeds
+                # update treeview with network speeds 
                 for iid in self.iface_tree.get_children():
                     vals = self.iface_tree.item(iid, "values")
                     if vals and vals[0] == "Total":
