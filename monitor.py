@@ -1,4 +1,3 @@
-
 # monitor.py
 from typing import Dict, List
 import psutil
@@ -38,16 +37,18 @@ def prep_cpu_perc():
             continue
 #40 most cpu demanding processes
 def list_processes(limit: int = 40) -> List[Dict[str, float]]:
-    # get total cpu to calculate percentage
-    total_cpu = psutil.cpu_count(logical=False) or psutil.cpu_count(logical=True) or 1
+    # get number of logical cpus (threads) for percentage calculation
+    num_logical_cpus = psutil.cpu_count(logical=True) or 1
     
     rows: List[Dict[str, float]] = []
-    for p in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_info']):
+    for p in psutil.process_iter(['pid', 'name', 'memory_info']):
         try:
             info = p.info
-            cpu = float(info.get('cpu_percent') or 0.0)
-            # calculate as percentage of total cpu (should be total_cpu * 100 but using cores instead)
-            cpu = cpu / total_cpu
+            # cpu_percent() returns percentage across all cores (can be > 100)
+            # divide by num_logical_cpus to get percentage of total threads (0-100%)
+            cpu = p.cpu_percent() / num_logical_cpus
+            # cap at 100% to ensure it never goes over
+            cpu = min(cpu, 100.0)
             mem_mb = bytes_to_mb(info['memory_info'].rss) if info.get('memory_info') else 0.0
             rows.append({
                 "pid": info.get('pid', 0),
