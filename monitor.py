@@ -77,9 +77,10 @@ def get_time_log_rows() -> List[Dict[str, str]]:
                 "pid": proc.info.get('pid', 0),
                 "name": proc.info.get('name', 'N/A'),
                 "uptime_hhmmss": fmt_hhmmss(uptime_sec),
+                "uptime_sec": uptime_sec,
             })
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
 
-    out.sort(key=lambda r: r['pid'], reverse=True)
+    out.sort(key=lambda r: r['uptime_sec'], reverse=True)
     return out
