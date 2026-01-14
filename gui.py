@@ -1,10 +1,11 @@
 
 # gui.py
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, filedialog
 from typing import Dict, List, Optional, Tuple
 import time
 import psutil
+import json
 
 import sysinfo
 import monitor
@@ -54,6 +55,8 @@ class SystemMonitorGUI:
         ttk.Label(header, text="My System", font=('Segoe UI', 11, 'bold')).pack(side='left')
         refresh_btn = ttk.Button(header, text="Refresh", command=self.refresh_static_sys_info)
         refresh_btn.pack(side='right')
+        export_btn = ttk.Button(header, text="Export to JSON", command=self.export_to_json)
+        export_btn.pack(side='right', padx=(0, 5))
 
         left = ttk.Frame(container)
         right = ttk.Frame(container)
@@ -214,9 +217,14 @@ class SystemMonitorGUI:
     def update_dynamic_time_log(self):
         ts = monitor.current_timestamp()
         rows = monitor.get_time_log_rows()
+        
+        # get system uptime
+        boot_time = psutil.boot_time()
+        system_uptime_sec = time.time() - boot_time
+        system_uptime = monitor.fmt_hhmmss(system_uptime_sec)
 
         self.time_log_text.delete('1.0', tk.END)
-        self.time_log_text.insert(tk.END, f"Uptime of Processes: {ts}\n")
+        self.time_log_text.insert(tk.END, f"System Uptime: {system_uptime}\n\n")
         for r in rows:
             self.time_log_text.insert(
                 tk.END,
@@ -225,3 +233,59 @@ class SystemMonitorGUI:
         self.time_log_text.see(tk.END)
 
         self.root.after(self.refresh_timelog_ms, self.update_dynamic_time_log)
+
+    def collect_all_data(self) -> Dict:
+        # collect all system data into a dictionary
+        system_info = sysinfo.get_static_sys_info()
+        cpu_usage = sysinfo.get_cpu_usage_percent()
+        system_info['cpu_usage'] = round(cpu_usage, 1)
+        
+        network_interfaces = sysinfo.get_network_interfaces()
+        
+        # get network speeds from treeview
+        network_speeds = []
+        for iid in self.iface_tree.get_children():
+            vals = self.iface_tree.item(iid, "values")
+            if vals:
+                network_speeds.append({
+                    "interface": vals[0],
+                    "ipv4": vals[1],
+                    "mac": vals[2],
+                    "download_mbps": vals[3],
+                    "upload_mbps": vals[4]
+                })
+        
+        public_ip = sysinfo.get_public_ip()
+        processes = monitor.list_processes()
+        time_log = monitor.get_time_log_rows()
+        timestamp = monitor.current_timestamp()
+        
+        # combine all data
+        all_data = {
+            "timestamp": timestamp,
+            "system_info": system_info,
+            "network": {
+                "public_ip": public_ip,
+                "interfaces": network_interfaces,
+                "network_speeds": network_speeds
+            },
+            "processes": processes,
+            "time_log": time_log
+        }
+        
+        return all_data
+
+    def export_to_json(self):
+        # export all data to a json file
+        data = self.collect_all_data()
+        
+        # ask user where to save the file
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        
+        # save the file
+        if filename:
+            with open(filename, 'w') as f:
+                json.dump(data, f, indent=4)
