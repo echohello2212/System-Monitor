@@ -21,6 +21,8 @@ class SystemMonitorGUI:
         # init network tracking variabless for calculating network speed
         self.prev_net_io = None
         self.prev_net_ts = None
+        self.prev_net_io_per_iface = None
+        self.iface_item_ids = {}
 
         self._build_notebook()
         self._build_tab1()
@@ -133,30 +135,56 @@ class SystemMonitorGUI:
 
     def _refresh_interfaces_static(self):
         self.iface_tree.delete(*self.iface_tree.get_children())
+        self.iface_item_ids = {}
         for iface in sysinfo.get_network_interfaces():
-            self.iface_tree.insert("", "end",
+            iid = self.iface_tree.insert("", "end",
                                    values=(iface["name"], iface["ipv4"] or "—", iface["mac"] or "—", "—", "—"))
+            self.iface_item_ids[iface["name"]] = iid
 
     def update_dynamic_metrics(self):
         # calculate network up/down speed from counters
         now = time.time()
         counters = sysinfo.get_net_io_counters()
+        per_iface_counters = sysinfo.get_net_io_counters_per_interface()
+        
         if counters:
             sent, recv = counters
             if self.prev_net_io is not None and self.prev_net_ts is not None:
                 delta_t = max(1e-3, now - self.prev_net_ts)
                 up_mbps   = monitor.bytes_to_mbps(sent - self.prev_net_io[0], delta_t)
                 down_mbps = monitor.bytes_to_mbps(recv - self.prev_net_io[1], delta_t)
-                # update treeview with network speeds 
+                
+                # update total row
+                total_found = False
                 for iid in self.iface_tree.get_children():
                     vals = self.iface_tree.item(iid, "values")
                     if vals and vals[0] == "Total":
-                        self.iface_tree.delete(iid)
-                self.iface_tree.insert("", "end",
-                    values=("Total", "—", "—", f"{down_mbps:.2f}", f"{up_mbps:.2f}"))
+                        self.iface_tree.item(iid, values=("Total", "—", "—", f"{down_mbps:.2f}", f"{up_mbps:.2f}"))
+                        total_found = True
+                        break
+                if not total_found:
+                    self.iface_tree.insert("", "end",
+                        values=("Total", "—", "—", f"{down_mbps:.2f}", f"{up_mbps:.2f}"))
 
             self.prev_net_io = (sent, recv)
             self.prev_net_ts = now
+        
+        # update per-interface speeds
+        if per_iface_counters and self.prev_net_io_per_iface is not None and self.prev_net_ts is not None:
+            delta_t = max(1e-3, now - self.prev_net_ts)
+            for iface_name, (sent, recv) in per_iface_counters.items():
+                if iface_name in self.iface_item_ids:
+                    if iface_name in self.prev_net_io_per_iface:
+                        prev_sent, prev_recv = self.prev_net_io_per_iface[iface_name]
+                        up_mbps = monitor.bytes_to_mbps(sent - prev_sent, delta_t)
+                        down_mbps = monitor.bytes_to_mbps(recv - prev_recv, delta_t)
+                        iid = self.iface_item_ids[iface_name]
+                        vals = self.iface_tree.item(iid, "values")
+                        if vals:
+                            self.iface_tree.item(iid, values=(vals[0], vals[1], vals[2], f"{down_mbps:.2f}", f"{up_mbps:.2f}"))
+        
+        if per_iface_counters:
+            self.prev_net_io_per_iface = per_iface_counters.copy()
 
         # schedule next refresh
         self.root.after(self.refresh_metrics_ms, self.update_dynamic_metrics)
