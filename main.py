@@ -1,5 +1,7 @@
 #main
 
+# Ser bra ut! Se till att uppdatera din readme.md med Funktion, Syfte, Systemkrav, Instruktioner!
+
 import tkinter as tk
 from gui import SystemMonitorGUI
 
