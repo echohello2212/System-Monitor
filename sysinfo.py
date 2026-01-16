@@ -106,3 +106,14 @@ def get_net_io_counters() -> Optional[Tuple[int, int]]:
         return (c.bytes_sent, c.bytes_recv)
     except Exception:
         return None
+
+def get_net_io_counters_per_interface() -> Optional[Dict[str, Tuple[int, int]]]:
+    # returns dict of interface_name: (bytes_sent, bytes_recv) or None if unavailable
+    try:
+        counters = psutil.net_io_counters(pernic=True)
+        result = {}
+        for iface, c in counters.items():
+            result[iface] = (c.bytes_sent, c.bytes_recv)
+        return result
+    except Exception:
+        return None
